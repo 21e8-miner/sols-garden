@@ -105,6 +105,34 @@ const dist=(x1,y1,x2,y2)=>Math.hypot(x2-x1,y2-y1);
 
 function buzz(ms){try{if(typeof navigator!=='undefined'&&navigator.vibrate)navigator.vibrate(ms);}catch(e){}}
 
+/* ---------- seed & telemetry ---------- */
+function xmur3(str){
+  let h=1779033703^str.length;
+  for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}
+  return function(){h=Math.imul(h^(h>>>16),2246822507);h=Math.imul(h^(h>>>13),3266489909);
+    return (h^=h>>>16)>>>0;};
+}
+function mulberry32(a){
+  return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+}
+let seedStr=null,pendingSeed=null;
+(function initSeed(){
+  let s=null;try{s=new URLSearchParams(location.search).get('seed')}catch(e){}
+  seedStr=s?s.slice(0,64):new Date().toISOString().slice(0,10);
+})();
+
+function emit(type,extra){try{const m=Object.assign({type:'webcade:'+type,seed:seedStr},extra||{});
+  if(window.parent&&window.parent!==window)window.parent.postMessage(m,"*");
+  dispatchEvent(new CustomEvent("webcade:"+type,{detail:m}));}catch(_){}}
+
+addEventListener("message",e=>{
+  const d=e&&e.data;if(!d||d.type!=="webcade:seed"||!d.seed)return;
+  const s=String(d.seed).slice(0,64);
+  if(game.scene==='play'){pendingSeed=s;}
+  else{seedStr=s;}
+});
+
 /* ---------- synth ---------- */
 let actx=null,muted=false;
 function initAudio(){
@@ -209,6 +237,7 @@ function spawnBug(){
 
 /* ---------- flow ---------- */
 function start(){
+  if(pendingSeed){seedStr=pendingSeed;pendingSeed=null;}
   initAudio();
   game.scene='play';game.score=0;game.lives=3;game.combo=0;game.tier=1;game.catches=0;
   game.spawnT=.5;game.bugsSpawned=0;game.newBest=false;
@@ -219,6 +248,7 @@ function start(){
   setTimeout(()=>snd(660,.16,'triangle',.12),110);
   setTimeout(()=>snd(880,.2,'triangle',.1),220);
   buzz(15);
+  emit("start",{tier:1,score:0});
 }
 function gameOver(){
   game.scene='over';game.overT=time;
@@ -226,6 +256,7 @@ function gameOver(){
   if(game.newBest){game.best=game.score;try{localStorage.setItem('sol_best',game.best)}catch(e){}}
   snd(220,.5,'sine',.16,-120);
   buzz([40,60,80]);
+  emit("score",{score:game.score,stage:game.tier,stages:game.tier,tier:game.tier,catches:game.catches,seed:seedStr});
 }
 function addFloat(x,y,txt,col,size=24){floats.push({x,y,txt,col,size,life:1.15,max:1.15});}
 function burst(x,y,n){
@@ -267,6 +298,7 @@ function handleCatch(b){
     addFloat(W/2,320,'THE GARDEN STIRS — TIER '+game.tier,'#4a4a2c',26);
     snd(520,.14,'triangle',.13);setTimeout(()=>snd(700,.2,'triangle',.11),130);
     buzz([20,30,20,40]);
+    emit("stage",{stage:game.tier,stages:game.tier,tier:game.tier,score:game.score,catches:game.catches});
   }
 }
 
